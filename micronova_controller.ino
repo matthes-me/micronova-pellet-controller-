@@ -1,8 +1,8 @@
-#define mqtt_server "192.168.X.X"
+#define mqtt_server "10.0.0.113"
 #define mqtt_port 1883
 #define mqtt_topic "micronova"
-#define mqtt_user "usrname"
-#define mqtt_pass "passwd"
+#define mqtt_user ""
+#define mqtt_pass ""
 #define hydro_mode 0
 
 #include <SoftwareSerial.h>
@@ -26,6 +26,7 @@ long previousMillis;
 
 #define pong_topic mqtt_topic "/pong"
 #define state_topic mqtt_topic "/state"
+#define tempset_topic mqtt_topic "/tempset"
 #define onoff_topic mqtt_topic "/onoff"
 #define ambtemp_topic mqtt_topic "/ambtemp"
 #define fumetemp_topic mqtt_topic "/fumetemp"
@@ -45,12 +46,13 @@ const char forceOff[4] = {0x80, 0x21, 0x00, 0xA1};
 
 #define stoveStateAddr 0x21
 #define ambTempAddr 0x01
+#define tempSetAddr 0x7D
 #define fumesTempAddr 0x3E
 #define flamePowerAddr 0x34
 #define waterTempAddr 0x03
 //#define waterSetAddr 0x36
 #define waterPresAddr 0x3C
-uint8_t stoveState, fumesTemp, flamePower, waterTemp /*, waterSet*/;
+uint8_t stoveState, fumesTemp, tempSet, flamePower, waterTemp /*, waterSet*/;
 float ambTemp, waterPres;
 char stoveRxData[2]; //When the heater is sending data, it sends two bytes: a checksum and the value
 
@@ -292,6 +294,12 @@ void checkStoveReply() //Works only when request is RAM
             client.publish(fumetemp_topic, String(fumesTemp).c_str(), true);
             Serial.printf("T. fumes %d\n", fumesTemp);
             break;
+        case tempSetAddr:
+            tempSet = val;
+            client.publish(tempset_topic, String(tempSet).c_str(), true);
+            Serial.printf("Thermostat %d\n", tempSet);
+            break;
+            
         case flamePowerAddr:
             if (stoveState < 6)
             {
@@ -346,6 +354,17 @@ void getAmbTemp() //Get room temperature
     StoveSerial.write(ambTempAddr);
     digitalWrite(ENABLE_RX, LOW);
     delay(80);
+    checkStoveReply();
+}
+
+void getTempSet() //Get the thermostat setting
+{
+    const byte readByte = 0x20;
+    StoveSerial.write(readByte);
+    delay(1);
+    StoveSerial.write(tempSetAddr);
+    digitalWrite(ENABLE_RX, LOW);
+    delay(60);
     checkStoveReply();
 }
 
@@ -409,6 +428,8 @@ void getStates() //Calls all the get…() functions
     getStoveState();
     delay(100);
     getAmbTemp();
+    delay(100);
+    getTempSet();
     delay(100);
     getFumeTemp();
     delay(100);
